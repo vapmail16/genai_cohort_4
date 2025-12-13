@@ -1,0 +1,129 @@
+🚆 Business Problem Definition — Transport Trend Classification System
+
+European transport authorities need a data-driven way to classify annual passenger transport activity for each country into meaningful operational categories. The dataset provided (estat_ttr00015.tsv) contains yearly passenger-kilometres (million PKM) for multiple European countries from 2013 to 2024.
+
+The goal of this project is to build a supervised classification model that assigns each country-year record into one of three transport trend categories:
+
+Classification Labels
+
+Decline – A year where transport activity decreases beyond a defined threshold.
+
+Normal/Stable – Minor fluctuations within expected year-to-year variation.
+
+Recovery/Growth – A year where transport activity increases significantly following a previous decline.
+
+🎯 Business Objectives
+
+This model will help policymakers and transport authorities:
+
+Detect Transport Decline Early → enabling targeted intervention programs.
+
+Monitor Post-Crisis Recovery (e.g., post-COVID transport patterns).
+
+Allocate Budget & Infrastructure Investments based on classified trends.
+
+Improve Accuracy of Transport Forecasting Models by incorporating trend categories as input features.
+
+📏 Trend Classification Logic (Explicit Thresholds)
+
+Thresholds will be calculated using % change year-to-year for each country:
+
+Decline: Transport activity decreases by ≥ 5% compared to previous year
+
+Normal: Change between -5% and +5%
+
+Recovery/Growth: Increase of ≥ 5%, OR two or more consecutive increases
+
+(Thresholds can be adjusted based on domain expert feedback.)
+
+⚙️ Functional Requirements (Strictly derived from dataset)
+Data Preparation
+
+Parse annual passenger-kilometre values for each country.
+
+Clean missing entries such as :@C by:
+
+marking year as “missing”,
+
+excluding from training, or
+
+imputing if needed (decision documented).
+
+Feature Engineering
+
+Compute year-to-year percentage change for each country.
+
+Normalise values if needed to ensure consistent scale.
+
+Classification Output
+
+For each country-year, produce:
+
+Assigned label: Decline / Normal / Recovery
+
+Supporting indicator: % change calculation
+
+Provide results in a structured table (country, year, trend category).
+
+📦 Project Scope (Clear & Manageable)
+In-Scope
+
+Classification of historical trend categories only
+
+Using provided dataset without introducing external data
+
+Handling missing values in the dataset
+
+Threshold-based label generation
+
+Model or rule-based classification approach
+
+Output in a tabular format for downstream reporting/dashboards
+
+Out of Scope
+
+Forecasting future passenger transport values
+
+Adding new features beyond what the dataset allows
+
+Using additional socio-economic datasets
+
+Recommender systems or simulation models
+
+📊 Expected Business KPIs
+
+Classification Accuracy ≥ 85% (validated on historical patterns)
+
+Coverage: At least 90% of country-year records successfully classified
+
+Time-to-Insight: Ability to classify entire dataset within seconds
+
+5. As a Policy Maker, I want to view a table of classified trends so that I can quickly identify countries showing decline or recovery.
+Acceptance Criteria
+
+Table includes columns: Country | Year | Transport Value | % Change | Classification.
+
+Table is sortable by country, year, and classification.
+
+Missing values are clearly marked.
+
+✅ TC-03: Sort by Country – Ascending
+
+Type: Functional / Positive
+
+Preconditions:
+
+Table contains multiple countries (e.g., AT, BG, CH, CZ).
+
+Steps:
+
+Open the “Classified Trends” table.
+
+Click on the Country column header to sort ascending.
+
+Expected Result:
+
+Rows are ordered alphabetically by Country (A → Z).
+
+All rows remain visible with unchanged values; only the order changes.
+
