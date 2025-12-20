@@ -3,8 +3,11 @@ langchain-core
 langchain-openai
 langchain-community
 langchain-experimental
+langchain-text-splitters
 jupyter
 ipykernel
 python-dotenv
 chromadb
 tiktoken
+numpy<2
+tenacity

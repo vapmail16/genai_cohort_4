@@ -77,6 +77,7 @@ ipykernel
 python-dotenv
 chromadb
 tiktoken
+numpy<2
 ```
 
 Install packages:
@@ -225,8 +226,7 @@ touch simple_qa_chain.py
 import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 
 # Load environment variables
 load_dotenv()
@@ -238,14 +238,14 @@ llm = ChatOpenAI(
     temperature=0.1,
 )
 
-# Step 2: Create a Prompt Template
-prompt_template = PromptTemplate(
-    input_variables=["question"],
-    template="Answer this question in a clear and concise way: {question}"
-)
+# Step 2: Create a Prompt Template (using modern LCEL syntax)
+prompt_template = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant. Answer questions clearly and concisely."),
+    ("human", "{question}")
+])
 
-# Step 3: Create a Chain
-chain = LLMChain(llm=llm, prompt=prompt_template)
+# Step 3: Create a Chain using LCEL (LangChain Expression Language)
+chain = prompt_template | llm
 
 # Step 4: Test the Chain
 if __name__ == "__main__":
@@ -263,10 +263,12 @@ if __name__ == "__main__":
         print(f"\n--- Question {i} ---")
         print(f"Q: {question}")
         
-        # Run the chain
-        response = chain.run(question=question)
+        # Run the chain (using invoke for modern LCEL)
+        response = chain.invoke({"question": question})
         
-        print(f"A: {response}")
+        # Extract content from AIMessage
+        answer = response.content if hasattr(response, 'content') else str(response)
+        print(f"A: {answer}")
 ```
 
 ```bash
@@ -296,8 +298,7 @@ touch sequential_chain.py
 import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain.chains import LLMChain, SimpleSequentialChain
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 
 # Load environment variables
 load_dotenv()
@@ -310,34 +311,42 @@ llm = ChatOpenAI(
 )
 
 # Step 1: Create the first chain (generate topic)
-topic_template = PromptTemplate(
-    input_variables=["subject"],
-    template="Generate an interesting topic about {subject}. Return only the topic name."
-)
-
-topic_chain = LLMChain(llm=llm, prompt=topic_template)
+topic_template = ChatPromptTemplate.from_messages([
+    ("system", "You are a creative topic generator."),
+    ("human", "Generate an interesting topic about {subject}. Return only the topic name.")
+])
+topic_chain = topic_template | llm
 
 # Step 2: Create the second chain (write summary)
-summary_template = PromptTemplate(
-    input_variables=["topic"],
-    template="Write a brief summary (2-3 sentences) about: {topic}"
-)
-
-summary_chain = LLMChain(llm=llm, prompt=summary_template)
+summary_template = ChatPromptTemplate.from_messages([
+    ("system", "You are a concise writer."),
+    ("human", "Write a brief summary (2-3 sentences) about: {topic}")
+])
+summary_chain = summary_template | llm
 
 # Step 3: Create the third chain (create title)
-title_template = PromptTemplate(
-    input_variables=["summary"],
-    template="Create a catchy title for this summary: {summary}"
-)
+title_template = ChatPromptTemplate.from_messages([
+    ("system", "You are a creative title writer."),
+    ("human", "Create a catchy title for this summary: {summary}")
+])
+title_chain = title_template | llm
 
-title_chain = LLMChain(llm=llm, prompt=title_template)
-
-# Step 4: Combine chains sequentially
-sequential_chain = SimpleSequentialChain(
-    chains=[topic_chain, summary_chain, title_chain],
-    verbose=True
-)
+# Step 4: Combine chains sequentially using LCEL
+def process_sequential(subject):
+    """Process through all chains sequentially"""
+    # Step 1: Generate topic
+    topic_response = topic_chain.invoke({"subject": subject})
+    topic = topic_response.content if hasattr(topic_response, 'content') else str(topic_response)
+    
+    # Step 2: Write summary
+    summary_response = summary_chain.invoke({"topic": topic})
+    summary = summary_response.content if hasattr(summary_response, 'content') else str(summary_response)
+    
+    # Step 3: Create title
+    title_response = title_chain.invoke({"summary": summary})
+    title = title_response.content if hasattr(title_response, 'content') else str(title_response)
+    
+    return title
 
 # Step 5: Test the Sequential Chain
 if __name__ == "__main__":
@@ -348,7 +357,7 @@ if __name__ == "__main__":
     
     for subject in subjects:
         print(f"\n--- Processing: {subject} ---")
-        result = sequential_chain.run(subject)
+        result = process_sequential(subject)
         print(f"\nFinal Result: {result}")
         print("-" * 50)
 ```
@@ -380,8 +389,7 @@ touch basic_prompts.py
 import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate, ChatPromptTemplate
-from langchain.chains import LLMChain
+from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 
 # Load environment variables
 load_dotenv()
@@ -396,16 +404,17 @@ llm = ChatOpenAI(
 print("📝 Understanding Prompt Templates")
 print("=" * 50)
 
-# Example 1: Basic Prompt Template
+# Example 1: Basic Prompt Template (using ChatPromptTemplate for modern API)
 print("\n--- Example 1: Basic Prompt Template ---")
-basic_template = PromptTemplate(
-    input_variables=["name", "topic"],
-    template="Hello {name}! Can you explain {topic} to me?"
-)
+basic_template = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant."),
+    ("human", "Hello {name}! Can you explain {topic} to me?")
+])
 
-chain = LLMChain(llm=llm, prompt=basic_template)
-response = chain.run(name="Vikkas", topic="machine learning")
-print(f"Response: {response}")
+chain = basic_template | llm
+response = chain.invoke({"name": "Vikkas", "topic": "machine learning"})
+answer = response.content if hasattr(response, 'content') else str(response)
+print(f"Response: {answer}")
 
 # Example 2: Chat Prompt Template
 print("\n--- Example 2: Chat Prompt Template ---")
@@ -414,16 +423,16 @@ chat_template = ChatPromptTemplate.from_messages([
     ("human", "Explain {topic} to someone who is a {level}")
 ])
 
-chain = LLMChain(llm=llm, prompt=chat_template)
-response = chain.run(topic="quantum computing", level="beginner")
-print(f"Response: {response}")
+chain = chat_template | llm
+response = chain.invoke({"topic": "quantum computing", "level": "beginner"})
+answer = response.content if hasattr(response, 'content') else str(response)
+print(f"Response: {answer}")
 
 # Example 3: Few-Shot Prompt Template
 print("\n--- Example 3: Few-Shot Prompt Template ---")
-few_shot_template = PromptTemplate(
-    input_variables=["input", "output"],
-    template="""
-    Examples of good explanations:
+few_shot_template = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant that provides clear explanations."),
+    ("human", """Examples of good explanations:
     
     Input: Python
     Output: Python is a programming language that's easy to learn and powerful.
@@ -432,13 +441,13 @@ few_shot_template = PromptTemplate(
     Output: AI (Artificial Intelligence) is technology that makes machines smart.
     
     Input: {input}
-    Output: {output}
-    """
-)
+    Output:""")
+])
 
-chain = LLMChain(llm=llm, prompt=few_shot_template)
-response = chain.run(input="Blockchain", output="")
-print(f"Response: {response}")
+chain = few_shot_template | llm
+response = chain.invoke({"input": "Blockchain"})
+answer = response.content if hasattr(response, 'content') else str(response)
+print(f"Response: {answer}")
 ```
 
 ```bash
@@ -457,14 +466,7 @@ touch advanced_prompts.py
 import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain.prompts import (
-    PromptTemplate,
-    ChatPromptTemplate,
-    FewShotPromptTemplate,
-    FewShotChatMessagePromptTemplate
-)
-from langchain.prompts.example_selector import LengthBasedExampleSelector
-from langchain.chains import LLMChain
+from langchain_core.prompts import ChatPromptTemplate
 
 # Load environment variables
 load_dotenv()
@@ -481,10 +483,9 @@ print("=" * 50)
 
 # Example 1: Chain-of-Thought Prompting
 print("\n--- Example 1: Chain-of-Thought Prompting ---")
-cot_template = PromptTemplate(
-    input_variables=["problem"],
-    template="""
-    Solve this problem step by step:
+cot_template = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant that solves problems step by step."),
+    ("human", """Solve this problem step by step:
     
     Problem: {problem}
     
@@ -494,13 +495,13 @@ cot_template = PromptTemplate(
     3. Next, I'll work through the solution
     4. Finally, I'll verify my answer
     
-    Solution:
-    """
-)
+    Solution:""")
+])
 
-chain = LLMChain(llm=llm, prompt=cot_template)
-response = chain.run(problem="If a train travels 60 miles per hour for 2.5 hours, how far does it travel?")
-print(f"Response: {response}")
+chain = cot_template | llm
+response = chain.invoke({"problem": "If a train travels 60 miles per hour for 2.5 hours, how far does it travel?"})
+answer = response.content if hasattr(response, 'content') else str(response)
+print(f"Response: {answer}")
 
 # Example 2: Role-Based Prompting
 print("\n--- Example 2: Role-Based Prompting ---")
@@ -509,20 +510,20 @@ role_template = ChatPromptTemplate.from_messages([
     ("human", "{question}")
 ])
 
-chain = LLMChain(llm=llm, prompt=role_template)
-response = chain.run(
-    role="financial advisor",
-    expertise="investment strategies and risk management",
-    question="What should I know about investing in stocks?"
-)
-print(f"Response: {response}")
+chain = role_template | llm
+response = chain.invoke({
+    "role": "financial advisor",
+    "expertise": "investment strategies and risk management",
+    "question": "What should I know about investing in stocks?"
+})
+answer = response.content if hasattr(response, 'content') else str(response)
+print(f"Response: {answer}")
 
 # Example 3: Structured Output Prompting
 print("\n--- Example 3: Structured Output Prompting ---")
-structured_template = PromptTemplate(
-    input_variables=["topic"],
-    template="""
-    Provide information about {topic} in the following format:
+structured_template = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant that provides structured information."),
+    ("human", """Provide information about {topic} in the following format:
     
     Topic: [topic name]
     Definition: [brief definition]
@@ -532,13 +533,13 @@ structured_template = PromptTemplate(
     3. [third key point]
     Example: [a practical example]
     
-    Information:
-    """
-)
+    Information:""")
+])
 
-chain = LLMChain(llm=llm, prompt=structured_template)
-response = chain.run(topic="neural networks")
-print(f"Response: {response}")
+chain = structured_template | llm
+response = chain.invoke({"topic": "neural networks"})
+answer = response.content if hasattr(response, 'content') else str(response)
+print(f"Response: {answer}")
 ```
 
 ```bash
@@ -571,13 +572,8 @@ touch memory_types.py
 import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain.memory import (
-    ConversationBufferMemory,
-    ConversationBufferWindowMemory,
-    ConversationSummaryMemory,
-    ConversationTokenBufferMemory
-)
-from langchain.chains import ConversationChain
+from langchain_core.chat_history import InMemoryChatMessageHistory
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # Load environment variables
 load_dotenv()
@@ -594,52 +590,101 @@ print("=" * 50)
 
 # Example 1: ConversationBufferMemory (remembers everything)
 print("\n--- Example 1: ConversationBufferMemory ---")
-buffer_memory = ConversationBufferMemory()
-conversation = ConversationChain(
-    llm=llm,
-    memory=buffer_memory,
-    verbose=True
-)
+buffer_memory = InMemoryChatMessageHistory()
+prompt = ChatPromptTemplate.from_messages([
+    MessagesPlaceholder(variable_name="history"),
+    ("human", "{input}")
+])
+chain = prompt | llm
 
 print("User: My name is Vikkas")
-conversation.predict(input="My name is Vikkas")
+buffer_memory.add_user_message("My name is Vikkas")
+response = chain.invoke({
+    "history": buffer_memory.messages,
+    "input": "My name is Vikkas"
+})
+buffer_memory.add_ai_message(response)
+
 print("\nUser: What's my name?")
-response = conversation.predict(input="What's my name?")
-print(f"AI: {response}")
+response = chain.invoke({
+    "history": buffer_memory.messages,
+    "input": "What's my name?"
+})
+answer = response.content if hasattr(response, 'content') else str(response)
+print(f"AI: {answer}")
 
 # Example 2: ConversationBufferWindowMemory (remembers last 2 messages)
 print("\n--- Example 2: ConversationBufferWindowMemory ---")
-window_memory = ConversationBufferWindowMemory(k=2)
-conversation = ConversationChain(
-    llm=llm,
-    memory=window_memory,
-    verbose=True
-)
+window_memory = InMemoryChatMessageHistory()
+prompt = ChatPromptTemplate.from_messages([
+    MessagesPlaceholder(variable_name="history"),
+    ("human", "{input}")
+])
+chain = prompt | llm
 
 print("User: I like Python")
-conversation.predict(input="I like Python")
-print("\nUser: I also like JavaScript")
-conversation.predict(input="I also like JavaScript")
-print("\nUser: What programming languages do I like?")
-response = conversation.predict(input="What programming languages do I like?")
-print(f"AI: {response}")
+window_memory.add_user_message("I like Python")
+response = chain.invoke({
+    "history": window_memory.messages[-2:] if len(window_memory.messages) > 2 else window_memory.messages,
+    "input": "I like Python"
+})
+window_memory.add_ai_message(response)
 
-# Example 3: ConversationSummaryMemory (summarizes conversation)
-print("\n--- Example 3: ConversationSummaryMemory ---")
-summary_memory = ConversationSummaryMemory(llm=llm)
-conversation = ConversationChain(
-    llm=llm,
-    memory=summary_memory,
-    verbose=True
-)
+print("\nUser: I also like JavaScript")
+window_memory.add_user_message("I also like JavaScript")
+# Keep only last 2 messages for window memory
+if len(window_memory.messages) > 4:
+    window_memory.messages = window_memory.messages[-4:]
+response = chain.invoke({
+    "history": window_memory.messages[-2:] if len(window_memory.messages) > 2 else window_memory.messages,
+    "input": "I also like JavaScript"
+})
+window_memory.add_ai_message(response)
+
+print("\nUser: What programming languages do I like?")
+# Keep only last 2 messages
+if len(window_memory.messages) > 4:
+    window_memory.messages = window_memory.messages[-4:]
+response = chain.invoke({
+    "history": window_memory.messages[-2:] if len(window_memory.messages) > 2 else window_memory.messages,
+    "input": "What programming languages do I like?"
+})
+answer = response.content if hasattr(response, 'content') else str(response)
+print(f"AI: {answer}")
+
+# Example 3: ConversationSummaryMemory (simplified - using full history)
+print("\n--- Example 3: ConversationSummaryMemory (Simplified) ---")
+summary_memory = InMemoryChatMessageHistory()
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant. Remember previous conversations."),
+    MessagesPlaceholder(variable_name="history"),
+    ("human", "{input}")
+])
+chain = prompt | llm
 
 print("User: I work in banking")
-conversation.predict(input="I work in banking")
+summary_memory.add_user_message("I work in banking")
+response = chain.invoke({
+    "history": summary_memory.messages,
+    "input": "I work in banking"
+})
+summary_memory.add_ai_message(response)
+
 print("\nUser: I deal with CRR regulations")
-conversation.predict(input="I deal with CRR regulations")
+summary_memory.add_user_message("I deal with CRR regulations")
+response = chain.invoke({
+    "history": summary_memory.messages,
+    "input": "I deal with CRR regulations"
+})
+summary_memory.add_ai_message(response)
+
 print("\nUser: What do you know about me?")
-response = conversation.predict(input="What do you know about me?")
-print(f"AI: {response}")
+response = chain.invoke({
+    "history": summary_memory.messages,
+    "input": "What do you know about me?"
+})
+answer = response.content if hasattr(response, 'content') else str(response)
+print(f"AI: {answer}")
 ```
 
 ```bash
@@ -658,14 +703,8 @@ touch conversation_chatbot.py
 import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationChain
-from langchain.prompts import (
-    ChatPromptTemplate,
-    MessagesPlaceholder,
-    SystemMessagePromptTemplate,
-    HumanMessagePromptTemplate
-)
+from langchain_core.chat_history import InMemoryChatMessageHistory
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # Load environment variables
 load_dotenv()
@@ -678,27 +717,17 @@ llm = ChatOpenAI(
 )
 
 # Create memory
-memory = ConversationBufferMemory(
-    return_messages=True,
-    memory_key="chat_history"
-)
+memory = InMemoryChatMessageHistory()
 
 # Create prompt template with memory
 prompt = ChatPromptTemplate.from_messages([
-    SystemMessagePromptTemplate.from_template(
-        "You are a helpful assistant. You remember the conversation history and provide contextually relevant responses."
-    ),
+    ("system", "You are a helpful assistant. You remember the conversation history and provide contextually relevant responses."),
     MessagesPlaceholder(variable_name="chat_history"),
-    HumanMessagePromptTemplate.from_template("{input}")
+    ("human", "{input}")
 ])
 
-# Create conversation chain
-conversation = ConversationChain(
-    llm=llm,
-    memory=memory,
-    prompt=prompt,
-    verbose=True
-)
+# Create conversation chain using LCEL
+chain = prompt | llm
 
 # Interactive conversation
 if __name__ == "__main__":
@@ -713,8 +742,23 @@ if __name__ == "__main__":
             print("Goodbye!")
             break
         
-        response = conversation.predict(input=user_input)
-        print(f"AI: {response}\n")
+        # Get chat history from memory
+        chat_history = memory.messages
+        
+        # Invoke chain with memory
+        response = chain.invoke({
+            "chat_history": chat_history,
+            "input": user_input
+        })
+        
+        # Extract answer
+        answer = response.content if hasattr(response, 'content') else str(response)
+        
+        # Save to memory
+        memory.add_user_message(user_input)
+        memory.add_ai_message(response)
+        
+        print(f"AI: {answer}\n")
 ```
 
 ```bash
@@ -740,8 +784,9 @@ touch basic_tools.py
 import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain.tools import Tool
-from langchain.agents import initialize_agent, AgentType
+from langchain.agents import create_openai_tools_agent, AgentExecutor
+from langchain_core.tools import Tool
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # Load environment variables
 load_dotenv()
@@ -794,13 +839,16 @@ tools = [
     )
 ]
 
+# Create prompt for agent
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant with access to tools."),
+    ("human", "{input}"),
+    MessagesPlaceholder(variable_name="agent_scratchpad"),
+])
+
 # Create agent with tools
-agent = initialize_agent(
-    tools,
-    llm,
-    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-    verbose=True
-)
+agent = create_openai_tools_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
 # Test the agent
 if __name__ == "__main__":
@@ -812,8 +860,8 @@ if __name__ == "__main__":
     
     for query in queries:
         print(f"\n--- Query: {query} ---")
-        response = agent.run(query)
-        print(f"Response: {response}")
+        response = agent_executor.invoke({"input": query})
+        print(f"Response: {response['output']}")
 ```
 
 ```bash
@@ -832,9 +880,10 @@ touch agent_with_memory.py
 import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain.tools import Tool
-from langchain.agents import initialize_agent, AgentType
-from langchain.memory import ConversationBufferMemory
+from langchain.agents import create_openai_tools_agent, AgentExecutor
+from langchain_core.chat_history import InMemoryChatMessageHistory
+from langchain_core.tools import Tool
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # Load environment variables
 load_dotenv()
@@ -847,10 +896,7 @@ llm = ChatOpenAI(
 )
 
 # Create memory
-memory = ConversationBufferMemory(
-    memory_key="chat_history",
-    return_messages=True
-)
+memory = InMemoryChatMessageHistory()
 
 # Define tools
 def calculate(expression: str) -> str:
@@ -883,14 +929,17 @@ tools = [
     )
 ]
 
-# Create agent with memory
-agent = initialize_agent(
-    tools,
-    llm,
-    agent=AgentType.CONVERSATIONAL_REACT_DESCRIPTION,
-    memory=memory,
-    verbose=True
-)
+# Create prompt for agent with memory
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant with access to tools. You remember previous conversations."),
+    MessagesPlaceholder(variable_name="chat_history"),
+    ("human", "{input}"),
+    MessagesPlaceholder(variable_name="agent_scratchpad"),
+])
+
+# Create agent with tools
+agent = create_openai_tools_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, memory=memory)
 
 # Test the agent
 if __name__ == "__main__":
@@ -906,8 +955,11 @@ if __name__ == "__main__":
     
     for user_input in conversation:
         print(f"\nUser: {user_input}")
-        response = agent.run(input=user_input)
-        print(f"Agent: {response}")
+        response = agent_executor.invoke({"input": user_input, "chat_history": memory.messages})
+        print(f"Agent: {response['output']}")
+        # Update memory
+        memory.add_user_message(user_input)
+        memory.add_ai_message(response['output'])
 ```
 
 ```bash
@@ -938,7 +990,7 @@ from langchain_community.document_loaders import (
     WebBaseLoader,
     CSVLoader
 )
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # Load environment variables
 load_dotenv()
@@ -1023,7 +1075,7 @@ import os
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # Load environment variables
 load_dotenv()
@@ -1108,9 +1160,10 @@ import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.chains import RetrievalQA
-from langchain.prompts import PromptTemplate
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_retrieval_chain
 
 # Load environment variables
 load_dotenv()
@@ -1162,27 +1215,20 @@ llm = ChatOpenAI(
 )
 
 # Step 5: Create custom prompt template
-prompt_template = PromptTemplate(
-    input_variables=["context", "question"],
-    template="""
-    Use the following context to answer the question. If you don't know the answer, say so.
-    
-    Context: {context}
-    
-    Question: {question}
-    
-    Answer:
-    """
-)
+prompt = ChatPromptTemplate.from_template("""
+Use the following context to answer the question. If you don't know the answer, say so.
 
-# Step 6: Create RAG chain
-qa_chain = RetrievalQA.from_chain_type(
-    llm=llm,
-    chain_type="stuff",
-    retriever=vectorstore.as_retriever(search_kwargs={"k": 2}),
-    chain_type_kwargs={"prompt": prompt_template},
-    return_source_documents=True
-)
+Context: {context}
+
+Question: {input}
+
+Answer:
+""")
+
+# Step 6: Create RAG chain using modern LCEL
+document_chain = create_stuff_documents_chain(llm, prompt)
+retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
+qa_chain = create_retrieval_chain(retriever, document_chain)
 
 # Step 7: Test the RAG system
 if __name__ == "__main__":
@@ -1194,11 +1240,12 @@ if __name__ == "__main__":
     
     for question in questions:
         print(f"\n--- Question: {question} ---")
-        result = qa_chain({"query": question})
-        print(f"Answer: {result['result']}")
-        print(f"\nSources ({len(result['source_documents'])}):")
-        for i, doc in enumerate(result['source_documents'], 1):
-            print(f"  {i}. {doc.page_content[:100]}...")
+        result = qa_chain.invoke({"input": question})
+        print(f"Answer: {result['answer']}")
+        print(f"\nSources ({len(result['context'])}):")
+        for i, doc in enumerate(result['context'], 1):
+            content = doc.page_content if hasattr(doc, 'page_content') else str(doc)
+            print(f"  {i}. {content[:100]}...")
 ```
 
 ```bash
@@ -1231,11 +1278,11 @@ import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.chains import RetrievalQA
-from langchain.prompts import PromptTemplate
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationalRetrievalChain
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_retrieval_chain
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.chat_history import InMemoryChatMessageHistory
 
 # Load environment variables
 load_dotenv()
@@ -1249,10 +1296,7 @@ class BankingRAGSystem:
             model="gpt-4o",
             temperature=0.1
         )
-        self.memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True
-        )
+        self.memory = InMemoryChatMessageHistory()
         self.vectorstore = None
         self.qa_chain = None
         
@@ -1281,32 +1325,27 @@ class BankingRAGSystem:
         print("🔗 Creating Q&A chain...")
         
         # Custom prompt for banking regulations
-        prompt_template = PromptTemplate(
-            input_variables=["context", "question", "chat_history"],
-            template="""
-            You are a banking regulation expert. Answer questions about banking regulations
-            based on the provided context. If the answer is not in the context, say so.
-            
-            Previous conversation:
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", """You are a banking regulation expert. Answer questions about banking regulations
+            based on the provided context. If the answer is not in the context, say so."""),
+            MessagesPlaceholder(variable_name="chat_history"),
+            ("human", """Previous conversation:
             {chat_history}
             
             Context from regulations:
             {context}
             
-            Question: {question}
+            Question: {input}
             
-            Answer:
-            """
-        )
+            Answer:""")
+        ])
         
-        # Create conversational retrieval chain
-        self.qa_chain = ConversationalRetrievalChain.from_llm(
-            llm=self.llm,
-            retriever=self.vectorstore.as_retriever(search_kwargs={"k": 3}),
-            memory=self.memory,
-            combine_docs_chain_kwargs={"prompt": prompt_template},
-            verbose=True
-        )
+        # Create document chain
+        document_chain = create_stuff_documents_chain(self.llm, prompt)
+        
+        # Create retrieval chain
+        retriever = self.vectorstore.as_retriever(search_kwargs={"k": 3})
+        self.qa_chain = create_retrieval_chain(retriever, document_chain)
         print("   Q&A chain created")
         
     def ask(self, question):
@@ -1314,7 +1353,19 @@ class BankingRAGSystem:
         if not self.qa_chain:
             return "System not initialized. Please load documents first."
         
-        result = self.qa_chain({"question": question})
+        # Get chat history
+        chat_history = self.memory.messages
+        
+        # Invoke chain
+        result = self.qa_chain.invoke({
+            "input": question,
+            "chat_history": chat_history
+        })
+        
+        # Update memory
+        self.memory.add_user_message(question)
+        self.memory.add_ai_message(result["answer"])
+        
         return result["answer"]
     
     def chat(self):
@@ -1388,7 +1439,7 @@ touch demos/09_advanced/streaming_demo.py
 import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+from langchain_core.callbacks import StreamingStdOutCallbackHandler
 
 # Load environment variables
 load_dotenv()
@@ -1423,8 +1474,9 @@ touch demos/09_advanced/custom_tools.py
 import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain.tools import Tool, StructuredTool
-from langchain.agents import initialize_agent, AgentType
+from langchain_core.tools import Tool, StructuredTool
+from langchain.agents import create_openai_tools_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from pydantic import BaseModel, Field
 
 # Load environment variables
@@ -1458,13 +1510,16 @@ llm = ChatOpenAI(
     temperature=0.1
 )
 
+# Create prompt for agent
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant with access to tools."),
+    ("human", "{input}"),
+    MessagesPlaceholder(variable_name="agent_scratchpad"),
+])
+
 # Create agent with custom tool
-agent = initialize_agent(
-    [calculator_tool],
-    llm,
-    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-    verbose=True
-)
+agent = create_openai_tools_agent(llm, [calculator_tool], prompt)
+agent_executor = AgentExecutor(agent=agent, tools=[calculator_tool], verbose=True)
 
 # Test
 if __name__ == "__main__":
@@ -1472,8 +1527,8 @@ if __name__ == "__main__":
     print("=" * 50)
     
     query = "What is 15 * 23 + 100?"
-    response = agent.run(query)
-    print(f"\nFinal Answer: {response}")
+    response = agent_executor.invoke({"input": query})
+    print(f"\nFinal Answer: {response['output']}")
 ```
 
 ---
@@ -1488,9 +1543,8 @@ touch demos/09_advanced/error_handling.py
 import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain.llms import OpenAI
-from langchain.callbacks import BaseCallbackHandler
-from langchain.utilities import retry
+from langchain_core.callbacks import BaseCallbackHandler
+from tenacity import retry, stop_after_attempt, wait_exponential
 import time
 
 # Load environment variables
@@ -1510,12 +1564,12 @@ llm = ChatOpenAI(
 )
 
 # Retry decorator
-@retry(stop_max_attempt_number=3, wait_exponential_multiplier=1000)
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10))
 def robust_query(prompt):
     """Query with retry logic"""
     try:
         response = llm.invoke(prompt)
-        return response.content
+        return response.content if hasattr(response, 'content') else str(response)
     except Exception as e:
         print(f"Error occurred: {e}")
         raise
