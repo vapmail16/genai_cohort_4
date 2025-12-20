@@ -1,0 +1,10 @@
+langchain
+langchain-core
+langchain-openai
+langchain-community
+langchain-experimental
+jupyter
+ipykernel
+python-dotenv
+chromadb
+tiktoken
