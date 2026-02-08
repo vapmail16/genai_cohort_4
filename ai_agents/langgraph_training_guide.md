@@ -6,8 +6,10 @@
 
 1. [**Introduction & Setup**](#1-introduction--setup)
 2. [**Core Concepts**](#2-core-concepts)
+
+
 3. [**Building Your First Graph**](#3-building-your-first-graph)
-4. [**Messages & Conversations**](#4-messages--conversations)
+4. message conversations
 5. [**Tool Calling**](#5-tool-calling)
 6. [**State Management**](#6-state-management)
 7. [**Complete Agents**](#7-complete-agents)
@@ -191,9 +193,6 @@ Input Data → [Process A] → [Decision Point] → [Process B] or [Process C] �
 
 
 ****
-
-
-
 
 import random
 from typing_extensions import TypedDict
