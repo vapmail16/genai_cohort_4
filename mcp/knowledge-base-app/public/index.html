@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Knowledge Base</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    .container { max-width: 900px; margin: 0 auto; padding: 1.5rem; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; border-bottom: 1px solid #334155; padding-bottom: 1rem; }
+    h1 { margin: 0; font-size: 1.5rem; font-weight: 600; }
+    .btn { display: inline-flex; align-items: center; padding: 0.5rem 1rem; border-radius: 8px; border: none; font-weight: 500; cursor: pointer; text-decoration: none; font-size: 0.9rem; }
+    .btn-primary { background: #3b82f6; color: #fff; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-ghost { background: transparent; color: #94a3b8; }
+    .btn-ghost:hover { background: #1e293b; color: #e2e8f0; }
+    .search-bar { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .search-bar input { flex: 1; padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #e2e8f0; font-size: 1rem; }
+    .search-bar input:focus { outline: none; border-color: #3b82f6; }
+    .search-bar select { padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #e2e8f0; }
+    .article-list { display: flex; flex-direction: column; gap: 0.75rem; }
+    .article-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 1rem; transition: border-color 0.15s; }
+    .article-card:hover { border-color: #475569; }
+    .article-card a { color: inherit; text-decoration: none; }
+    .article-card h3 { margin: 0 0 0.35rem; font-size: 1.1rem; font-weight: 600; }
+    .article-card .meta { font-size: 0.85rem; color: #94a3b8; margin-bottom: 0.35rem; }
+    .article-card .summary { font-size: 0.9rem; color: #cbd5e1; line-height: 1.4; }
+    .tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; }
+    .tag { background: #334155; color: #94a3b8; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
+    .view { display: none; }
+    .view.active { display: block; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; margin-bottom: 0.35rem; font-size: 0.9rem; color: #94a3b8; }
+    .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #e2e8f0; font-size: 1rem; font-family: inherit; }
+    .form-group textarea { min-height: 120px; resize: vertical; }
+    .form-group input:focus, .form-group textarea:focus { outline: none; border-color: #3b82f6; }
+    .form-actions { display: flex; gap: 0.5rem; margin-top: 1.25rem; }
+    .article-detail .title { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .article-detail .meta { font-size: 0.9rem; color: #94a3b8; margin-bottom: 1rem; }
+    .article-detail .content { line-height: 1.6; white-space: pre-wrap; }
+    .empty { text-align: center; padding: 2rem; color: #64748b; }
+    .error { background: #7f1d1d; color: #fecaca; padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; }
+    .status-badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; }
+    .status-published { background: #14532d; color: #86efac; }
+    .status-draft { background: #422006; color: #fcd34d; }
+    .status-archived { background: #374151; color: #9ca3af; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Knowledge Base</h1>
+      <div>
+        <a href="#" class="btn btn-ghost" data-action="list">All articles</a>
+        <a href="#" class="btn btn-primary" data-action="new">New article</a>
+      </div>
+    </header>
+
+    <div id="listView" class="view active">
+      <div class="search-bar">
+        <input type="search" id="searchInput" placeholder="Search articles…" aria-label="Search">
+        <select id="statusFilter" aria-label="Status">
+          <option value="">All statuses</option>
+          <option value="published">Published</option>
+          <option value="draft">Draft</option>
+          <option value="archived">Archived</option>
+        </select>
+      </div>
+      <div id="articleList" class="article-list">Loading…</div>
+    </div>
+
+    <div id="detailView" class="view">
+      <a href="#" class="btn btn-ghost" data-action="list">← Back</a>
+      <div id="articleDetail" class="article-detail"></div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" id="editBtn">Edit</button>
+      </div>
+    </div>
+
+    <div id="formView" class="view">
+      <a href="#" class="btn btn-ghost" data-action="list">← Back</a>
+      <h2 id="formTitle">New article</h2>
+      <div id="formError" class="error" style="display:none;"></div>
+      <form id="articleForm">
+        <input type="hidden" id="articleId">
+        <div class="form-group">
+          <label for="title">Title *</label>
+          <input type="text" id="title" required minlength="3" maxlength="200" placeholder="Article title">
+        </div>
+        <div class="form-group">
+          <label for="summary">Summary</label>
+          <input type="text" id="summary" maxlength="500" placeholder="Brief summary (1–2 sentences)">
+        </div>
+        <div class="form-group">
+          <label for="content">Content *</label>
+          <textarea id="content" required minlength="10" placeholder="Article content"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="tags">Tags * (comma-separated)</label>
+          <input type="text" id="tags" placeholder="e.g. mcp, ai, tutorial" required>
+        </div>
+        <div class="form-group">
+          <label for="author">Author</label>
+          <input type="text" id="author" placeholder="Author name">
+        </div>
+        <div class="form-group">
+          <label for="status">Status</label>
+          <select id="status">
+            <option value="draft">Draft</option>
+            <option value="published">Published</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Save</button>
+          <button type="button" class="btn btn-ghost" data-action="list">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const listView = document.getElementById('listView');
+    const detailView = document.getElementById('detailView');
+    const formView = document.getElementById('formView');
+    const articleList = document.getElementById('articleList');
+    const articleDetail = document.getElementById('articleDetail');
+    const searchInput = document.getElementById('searchInput');
+    const statusFilter = document.getElementById('statusFilter');
+    const articleForm = document.getElementById('articleForm');
+    const formTitle = document.getElementById('formTitle');
+    const formError = document.getElementById('formError');
+    const editBtn = document.getElementById('editBtn');
+
+    const API = '/api/articles';
+
+    function showView(view) {
+      listView.classList.remove('active');
+      detailView.classList.remove('active');
+      formView.classList.remove('active');
+      view.classList.add('active');
+    }
+
+    function showError(el, msg) {
+      el.style.display = msg ? 'block' : 'none';
+      el.textContent = msg || '';
+    }
+
+    async function fetchArticles() {
+      const q = searchInput.value.trim();
+      const status = statusFilter.value || '';
+      const params = new URLSearchParams();
+      if (q) params.set('q', q);
+      if (status) params.set('status', status);
+      const res = await fetch(API + (params.toString() ? '?' + params : ''));
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    async function fetchArticle(id) {
+      const res = await fetch(API + '/' + encodeURIComponent(id));
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    function renderList(articles) {
+      if (!articles.length) {
+        articleList.innerHTML = '<p class="empty">No articles found. Create one?</p>';
+        return;
+      }
+      articleList.innerHTML = articles.map((a) => {
+        const statusClass = 'status-' + (a.status || 'draft');
+        return `
+          <article class="article-card">
+            <a href="#" data-action="detail" data-id="${a.id}">
+              <h3>${escapeHtml(a.title)}</h3>
+              <div class="meta">
+                <span class="status-badge ${statusClass}">${escapeHtml(a.status || 'draft')}</span>
+                ${a.updatedAt ? ' · ' + new Date(a.updatedAt).toLocaleDateString() : ''}
+              </div>
+              ${a.summary ? `<p class="summary">${escapeHtml(a.summary)}</p>` : ''}
+              <div class="tags">${(a.tags || []).map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>
+            </a>
+          </article>`;
+      }).join('');
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    async function loadList() {
+      articleList.innerHTML = 'Loading…';
+      showView(listView);
+      try {
+        const data = await fetchArticles();
+        renderList(data.articles || []);
+      } catch (e) {
+        articleList.innerHTML = '<p class="error">Failed to load articles: ' + escapeHtml(e.message) + '</p>';
+      }
+    }
+
+    async function loadDetail(id) {
+      showView(detailView);
+      articleDetail.innerHTML = 'Loading…';
+      try {
+        const a = await fetchArticle(id);
+        const statusClass = 'status-' + (a.status || 'draft');
+        articleDetail.innerHTML = `
+          <h2 class="title">${escapeHtml(a.title)}</h2>
+          <div class="meta">
+            <span class="status-badge ${statusClass}">${escapeHtml(a.status || 'draft')}</span>
+            ${a.author ? ' · ' + escapeHtml(a.author) : ''}
+            ${a.updatedAt ? ' · Updated ' + new Date(a.updatedAt).toLocaleString() : ''}
+          </div>
+          ${(a.tags || []).length ? '<div class="tags">' + (a.tags || []).map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('') + '</div>' : ''}
+          ${a.summary ? '<p style="color:#94a3b8; margin-top:0.5rem;">' + escapeHtml(a.summary) + '</p>' : ''}
+          <div class="content">${escapeHtml(a.content || '')}</div>`;
+        editBtn.onclick = () => loadForm(id);
+      } catch (e) {
+        articleDetail.innerHTML = '<p class="error">Failed to load article: ' + escapeHtml(e.message) + '</p>';
+      }
+    }
+
+    function loadForm(id) {
+      formError.style.display = 'none';
+      document.getElementById('articleId').value = id || '';
+      formTitle.textContent = id ? 'Edit article' : 'New article';
+      if (id) {
+        fetchArticle(id).then((a) => {
+          document.getElementById('title').value = a.title || '';
+          document.getElementById('summary').value = a.summary || '';
+          document.getElementById('content').value = a.content || '';
+          document.getElementById('tags').value = (a.tags || []).join(', ');
+          document.getElementById('author').value = a.author || '';
+          document.getElementById('status').value = a.status || 'draft';
+        }).catch((e) => showError(formError, e.message));
+      } else {
+        document.getElementById('title').value = '';
+        document.getElementById('summary').value = '';
+        document.getElementById('content').value = '';
+        document.getElementById('tags').value = '';
+        document.getElementById('author').value = '';
+        document.getElementById('status').value = 'draft';
+      }
+      showView(formView);
+    }
+
+    articleForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      showError(formError, '');
+      const id = document.getElementById('articleId').value;
+      const tagsStr = document.getElementById('tags').value.trim();
+      const tags = tagsStr ? tagsStr.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      const payload = {
+        title: document.getElementById('title').value.trim(),
+        summary: document.getElementById('summary').value.trim() || undefined,
+        content: document.getElementById('content').value.trim(),
+        tags,
+        author: document.getElementById('author').value.trim() || undefined,
+        status: document.getElementById('status').value,
+      };
+      try {
+        if (id) {
+          await fetch(API + '/' + encodeURIComponent(id), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+        } else {
+          await fetch(API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+        }
+        loadList();
+      } catch (e) {
+        showError(formError, e.message);
+      }
+    });
+
+    searchInput.addEventListener('input', () => loadList());
+    searchInput.addEventListener('change', () => loadList());
+    statusFilter.addEventListener('change', () => loadList());
+
+    document.body.addEventListener('click', (e) => {
+      const a = e.target.closest('[data-action]');
+      if (!a) return;
+      e.preventDefault();
+      const action = a.dataset.action;
+      if (action === 'list') loadList();
+      else if (action === 'new') loadForm();
+      else if (action === 'detail' && a.dataset.id) loadDetail(a.dataset.id);
+    });
+
+    loadList();
+  </script>
+</body>
+</html>

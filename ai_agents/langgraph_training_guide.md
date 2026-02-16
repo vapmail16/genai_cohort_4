@@ -13,11 +13,12 @@
 5. [**Tool Calling**](#5-tool-calling)
 6. [**State Management**](#6-state-management)
 7. [**Complete Agents**](#7-complete-agents)
+
 8. [**ReACT Pattern**](#8-react-pattern)
+
 9. [**Memory & Persistence**](#9-memory--persistence)
 
 10. [**Real-World Project**](#10-real-world-project)
-
 11. [**Advanced Topics**](#11-advanced-topics)
 
 ---

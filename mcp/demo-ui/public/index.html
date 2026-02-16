@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP Demo — Tool Caller</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 0 auto; padding: 1rem; background: #1a1a2e; color: #eee; }
+    h1 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+    .server { color: #888; font-size: 0.9rem; margin-bottom: 1.5rem; }
+    .tool { border: 1px solid #333; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: #16213e; }
+    .tool h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+    .tool .desc { color: #aaa; font-size: 0.85rem; margin-bottom: 0.75rem; }
+    .tool form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; }
+    .tool label { display: flex; flex-direction: column; gap: 2px; font-size: 0.8rem; color: #aaa; }
+    .tool input, .tool select { padding: 0.4rem 0.6rem; border-radius: 4px; border: 1px solid #444; background: #0f0f23; color: #eee; min-width: 120px; }
+    .tool button { padding: 0.5rem 1rem; border-radius: 4px; border: none; background: #e94560; color: #fff; cursor: pointer; font-weight: 600; }
+    .tool button:hover { background: #c73e54; }
+    .result { margin-top: 0.75rem; padding: 0.75rem; border-radius: 4px; background: #0f0f23; border: 1px solid #333; font-family: monospace; font-size: 0.85rem; white-space: pre-wrap; word-break: break-word; }
+    .result.error { border-color: #c73e54; color: #e94560; }
+    .loading { color: #888; }
+  </style>
+</head>
+<body>
+  <h1>MCP Demo — Call tools</h1>
+  <p class="server" id="serverInfo">Connecting…</p>
+  <div id="tools">Loading tools…</div>
+
+  <script>
+    const serverInfo = document.getElementById('serverInfo');
+    const toolsEl = document.getElementById('tools');
+
+    function getJson(path) {
+      return fetch(path).then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
+    }
+
+    function postJson(path, body) {
+      return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
+    }
+
+    function buildInput(schema, name, required) {
+      if (!schema || schema.type !== 'object' || !schema.properties) return '';
+      const props = schema.properties;
+      const reqSet = new Set(schema.required || []);
+      let html = '';
+      for (const [key, p] of Object.entries(props)) {
+        const desc = p.description || key;
+        const isReq = required && reqSet.has(key);
+        const enumVals = p.enum;
+        if (enumVals) {
+          html += `<label>${key}${isReq ? ' *' : ''} <select name="${key}" data-type="string">`;
+          if (!isReq) html += '<option value="">—</option>';
+          enumVals.forEach(v => { html += `<option value="${v}">${v}</option>`; });
+          html += '</select></label>';
+        } else if (p.type === 'number' || p.type === 'integer') {
+          html += `<label>${key}${isReq ? ' *' : ''} <input type="number" name="${key}" placeholder="${desc}" data-type="number"></label>`;
+        } else if (p.type === 'boolean') {
+          html += `<label>${key} <input type="checkbox" name="${key}" data-type="boolean"></label>`;
+        } else if (p.type === 'array') {
+          html += `<label>${key}${isReq ? ' *' : ''} <input type="text" name="${key}" placeholder="e.g. a,b,c" data-type="array" title="${desc}"></label>`;
+        } else {
+          html += `<label>${key}${isReq ? ' *' : ''} <input type="text" name="${key}" placeholder="${desc}" data-type="string"></label>`;
+        }
+      }
+      return html;
+    }
+
+    function getFormArgs(form) {
+      const fd = new FormData(form);
+      const args = {};
+      for (const [key, dataType] of Object.entries(form.dataset)) {
+        if (!key.startsWith('param')) continue;
+        const paramName = key.replace('param', '').toLowerCase();
+        let val = fd.get(paramName);
+        if (val === null || val === undefined) continue;
+        if (dataType === 'number') val = Number(val);
+        else if (dataType === 'boolean') val = val === 'on' || val === 'true';
+        else if (dataType === 'array') val = val ? val.split(',').map(s => s.trim()).filter(Boolean) : [];
+        if (val !== '' && val !== undefined) args[paramName] = val;
+      }
+      const inputs = form.querySelectorAll('[name]');
+      inputs.forEach(inp => {
+        const n = inp.getAttribute('name');
+        if (!n || args[n] !== undefined) return;
+        const dt = inp.closest('label')?.querySelector('[data-type]')?.getAttribute('data-type');
+        let v = inp.type === 'checkbox' ? inp.checked : inp.value;
+        if (dt === 'number') v = Number(v);
+        if (dt === 'array') v = v ? v.split(',').map(s => s.trim()).filter(Boolean) : [];
+        if (v !== '' && v !== undefined) args[n] = v;
+      });
+      return args;
+    }
+
+    function showResult(block, content, isError) {
+      block.innerHTML = content;
+      block.className = 'result' + (isError ? ' error' : '');
+      block.classList.remove('loading');
+    }
+
+    async function loadTools() {
+      try {
+        const [server, list] = await Promise.all([getJson('/api/server'), getJson('/api/tools')]);
+        serverInfo.textContent = `Server: ${server.name}`;
+        const tools = list.tools || [];
+        if (tools.length === 0) {
+          toolsEl.innerHTML = '<p>No tools exposed by this server.</p>';
+          return;
+        }
+        toolsEl.innerHTML = tools.map(t => {
+          const schema = t.inputSchema || {};
+          const props = schema.properties || {};
+          const required = schema.required || [];
+          let inputsHtml = '';
+          for (const [key, p] of Object.entries(props)) {
+            const desc = p.description || key;
+            const isReq = required.includes(key);
+            if (p.enum) {
+              inputsHtml += `<label>${key}${isReq ? ' *' : ''} <select name="${key}">`;
+              if (!isReq) inputsHtml += '<option value="">—</option>';
+              p.enum.forEach(v => { inputsHtml += `<option value="${v}">${v}</option>`; });
+              inputsHtml += '</select></label>';
+            } else if (p.type === 'number' || p.type === 'integer') {
+              inputsHtml += `<label>${key}${isReq ? ' *' : ''} <input type="number" name="${key}" placeholder="${desc}"></label>`;
+            } else if (p.type === 'boolean') {
+              inputsHtml += `<label>${key} <input type="checkbox" name="${key}"></label>`;
+            } else if (p.type === 'array') {
+              inputsHtml += `<label>${key}${isReq ? ' *' : ''} <input type="text" name="${key}" placeholder="e.g. a,b,c" title="${desc}"></label>`;
+            } else {
+              inputsHtml += `<label>${key}${isReq ? ' *' : ''} <input type="text" name="${key}" placeholder="${desc}"></label>`;
+            }
+          }
+          return `
+            <div class="tool" data-tool="${t.name}">
+              <h2>${t.name}</h2>
+              <p class="desc">${t.description || '—'}</p>
+              <form>
+                ${inputsHtml}
+                <button type="submit">Call</button>
+              </form>
+              <div class="result" style="display:none;"></div>
+            </div>`;
+        }).join('');
+
+        toolsEl.querySelectorAll('form').forEach(form => {
+          form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const toolDiv = form.closest('.tool');
+            const toolName = toolDiv.dataset.tool;
+            const resultDiv = toolDiv.querySelector('.result');
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result loading';
+            resultDiv.textContent = 'Calling…';
+
+            const args = {};
+            const fd = new FormData(form);
+            for (const [key, val] of fd.entries()) {
+              if (val === '') continue;
+              const input = form.querySelector(`[name="${key}"]`);
+              const type = input?.type;
+              if (type === 'number') args[key] = Number(val);
+              else if (type === 'checkbox') args[key] = (input && input.checked) || val === 'on';
+              else if (input?.placeholder?.includes('e.g. a,b,c')) args[key] = val.split(',').map(s => s.trim()).filter(Boolean);
+              else args[key] = val;
+            }
+
+            try {
+              const result = await postJson('/api/call', { name: toolName, arguments: args });
+              const content = result.content;
+              let text = '';
+              if (Array.isArray(content)) {
+                text = content.map(c => c.text || JSON.stringify(c)).join('\n');
+              } else if (content?.text) {
+                text = content.text;
+              } else {
+                text = JSON.stringify(result, null, 2);
+              }
+              showResult(resultDiv, text, result.isError);
+            } catch (err) {
+              showResult(resultDiv, 'Error: ' + err.message, true);
+            }
+          });
+        });
+      } catch (err) {
+        serverInfo.textContent = 'Failed to connect';
+        toolsEl.innerHTML = '<p class="result error">Could not load tools. Is the demo server running? ' + err.message + '</p>';
+      }
+    }
+
+    loadTools();
+  </script>
+</body>
+</html>

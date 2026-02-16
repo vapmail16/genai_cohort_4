@@ -1,0 +1,14 @@
+{
+  "name": "mcp-knowledge-base-app",
+  "version": "1.0.0",
+  "description": "Proper web app for the knowledge base: list, search, create, edit articles (uses MCP server under the hood)",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "express": "^4.21.0"
+  }
+}
